@@ -34,7 +34,7 @@ class LLMNeedleHaystackTester:
     def __init__(self,
                  args,
                  needle="\nThe best thing to do in San Francisco is eat a sandwich and sit in Dolores Park on a sunny day.\n",#    \n在旧金山做的最棒的是事是吃一个三明治以及在晴天坐在多洛雷斯公园里\n
-                 haystack_dir="data/PaulGrahamEssays", # PaulGrahamEssays  
+                 haystack_dir="benchmarks/PaulGrahamEssays", # PaulGrahamEssays  
                  retrieval_question="The best thing to do in San Francisco is: ", 
                  results_version = 1,
                  context_lengths_min = None,

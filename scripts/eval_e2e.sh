@@ -1,7 +1,7 @@
 model_path="meta-llama/Meta-Llama-3.1-8B-Instruct"
 method="fastkv"
 
-CUDA_VISIBLE_DEVICES=0 python -m benchmark.e2e \
+CUDA_VISIBLE_DEVICES=0 python -m metrics_tools.e2e \
     --method $method \
     --model_path $model_path \
     --genlen 256 \

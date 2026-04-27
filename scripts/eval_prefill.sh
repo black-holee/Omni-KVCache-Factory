@@ -1,7 +1,7 @@
 model_path="meta-llama/Meta-Llama-3.1-8B-Instruct"
 method="fastkv"
 
-CUDA_VISIBLE_DEVICES=0 python -m benchmark.prefill \
+CUDA_VISIBLE_DEVICES=0 python -m metrics_tools.prefill \
     --method $method \
     --model_path $model_path \
     --tsp_idx 15 \

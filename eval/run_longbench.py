@@ -339,6 +339,6 @@ if __name__ == "__main__":
             print(f"Working on retain_rate {args.retain_rate} dataset {dataset} - {idx}/{len(datasets)}")
 
         args.dataset = dataset
-        args.data_file = f"data/LongBench/{args.dataset}.jsonl"
+        args.data_file = f"benchmarks/LongBench/{args.dataset}.jsonl"
         
         main(model, args)

@@ -280,6 +280,6 @@ if __name__ == "__main__":
             print(f"Working on retain_rate {args.retain_rate} dataset {dataset} - {idx}/{len(datasets)}")
 
         args.dataset = dataset
-        args.data_file = f"data/SQuAD/plain_text/{args.dataset}.json"
+        args.data_file = f"benchmarks/SQuAD/plain_text/{args.dataset}.json"
         
         main(model, args)
