@@ -1,9 +1,0 @@
-{
-  "permissions": {
-    "allow": [
-      "Bash(python -c \"import sys,json; d=json.loads\\(sys.stdin.readline\\(\\)\\); print\\(json.dumps\\(list\\(d.keys\\(\\)\\)\\)\\)\")",
-      "Bash(python -c \"import sys,json; d=json.loads\\(sys.stdin.readline\\(\\) if hasattr\\(sys.stdin,'readline'\\) else '['\\); print\\(json.dumps\\(list\\(d.keys\\(\\)\\) if isinstance\\(d,dict\\) else 'array'\\)\\)\")",
-      "Bash(python -c \"import sys; sys.path.insert\\(0, 'E:/claude_projects/Omni-KVCache-Factory'\\); from eval.metrics import qa_f1_score; print\\('ok'\\)\")"
-    ]
-  }
-}
