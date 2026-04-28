@@ -3,7 +3,7 @@ import json
 import argparse
 import numpy as np
 
-from eval.metrics import (
+from infer_eval.metrics import (
     string_match_all
 )
 
