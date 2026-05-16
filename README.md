@@ -42,7 +42,7 @@ cd ../..
 
 ## Supported Features
 
-### Text
+### Text-Only
 - **Model Type**
   - qwen3 (`Qwen3-0.6B`, `Qwen3-8B`, `Qwen3-14B`, ...)
 - **KV Method**
