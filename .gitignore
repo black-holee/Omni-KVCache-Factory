@@ -29,9 +29,6 @@ MANIFEST
 # experiment results
 outputs/
 
-# docs
-docs/
-
 # claude.local
 .claude/*local*.*
 
