@@ -15,7 +15,7 @@ from transformers import AutoModelForCausalLM, AutoTokenizer
 from rouge_score import rouge_scorer
 from datetime import datetime, timezone
 
-from baselines.monkeypatch import replace_llama, replace_mistral, set_model
+from baselines.monkeypatch import set_model
 from baselines.gemfilter.utils import gemfilter_generate_selection
 
 scorer = rouge_scorer.RougeScorer(['rouge1', 'rougeL'], use_stemmer=True)
@@ -23,7 +23,7 @@ scorer = rouge_scorer.RougeScorer(['rouge1', 'rougeL'], use_stemmer=True)
 def build_chat(tokenizer, prompt):
 
     messages = [{"role": "user", "content": prompt}]
-    prompt = tokenizer.apply_chat_template(messages, tokenize=False, add_generation_prompt=True, return_tensors="pt")
+    prompt = tokenizer.apply_chat_template(messages, tokenize=False, add_generation_prompt=True, return_tensors="pt", enable_thinking=False)
     
     return prompt
     
@@ -34,7 +34,7 @@ class LLMNeedleHaystackTester:
     def __init__(self,
                  args,
                  needle="\nThe best thing to do in San Francisco is eat a sandwich and sit in Dolores Park on a sunny day.\n",#    \n在旧金山做的最棒的是事是吃一个三明治以及在晴天坐在多洛雷斯公园里\n
-                 haystack_dir="benchmarks/PaulGrahamEssays", # PaulGrahamEssays  
+                 haystack_dir="data/PaulGrahamEssays", # PaulGrahamEssays  
                  retrieval_question="The best thing to do in San Francisco is: ", 
                  results_version = 1,
                  context_lengths_min = None,
@@ -105,8 +105,14 @@ class LLMNeedleHaystackTester:
         self.step = step
         self.method = method
         self.attn_implementation = attn_implementation
+
+        if self.args.method in ["fullkv"]:
+            self.save_dir = os.path.join(self.args.save_dir, f"{self.args.method}", "context")
+        elif self.args.method in ["fastkv"]:
+            self.save_dir = os.path.join(self.args.save_dir, f"{self.args.method}_{self.args.retain_rate}_{self.args.window_size if not isinstance(self.args.window_size, list) else self.args.window_size[0]}_tsp_rate_{self.args.tsp_rate}_tsp_idx_{self.args.tsp_idx}", "context")
+        else:
+            self.save_dir = os.path.join(self.args.save_dir, f"{self.args.method}_{self.args.retain_rate}_{self.args.window_size if not isinstance(self.args.window_size, list) else self.args.window_size[0]}", "context")
         
-        self.save_dir = os.path.join(self.args.save_dir, f"{self.args.method}", "context")
         os.makedirs(self.save_dir, exist_ok=True)
         
         if("/" in model_name):
@@ -140,7 +146,7 @@ class LLMNeedleHaystackTester:
         
         self.model_name = model_name
 
-        if(self.model_provider in ["LLaMA3", "Mistral"]):
+        if(self.model_provider in ["LLaMA3", "Mistral", "Qwen3"]):
             self.enc = AutoTokenizer.from_pretrained(model_name, trust_remote_code=True)
             # self.enc.add_special_tokens({'pad_token': '[PAD]'})
             print("loading from %s" % model_name)
@@ -150,7 +156,7 @@ class LLMNeedleHaystackTester:
 
             self.model_to_test=AutoModelForCausalLM.from_pretrained(
                 model_name, 
-                torch_dtype=torch.float16,
+                dtype=torch.float16,
                 attn_implementation=self.attn_implementation,
                 device_map="auto",
                 low_cpu_mem_usage=True, 
@@ -186,7 +192,13 @@ class LLMNeedleHaystackTester:
         # Generate the prompt for the Anthropic model
         # Replace the following line with the appropriate prompt structure
         if(self.model_provider not in ["OpenAI", "Anthropic"]):
-            test_format=f"<|im_start|> This is a very long story book: <book> {context} </book>.\n Based on the content of the book, Question: {self.retrieval_question}\nAnswer:"
+            if self.model_provider in ["Mistral", "Qwen3"]:
+                # These models go through build_chat() which applies the proper chat template.
+                # Do NOT include <|im_start|> tokens here — build_chat handles all formatting,
+                # and including them causes nested special tokens that garble the prompt.
+                test_format = f"This is a very long story book: <book> {context} </book>.\n Based on the content of the book, Question: {self.retrieval_question}\nAnswer:"
+            else:
+                test_format = f"<|im_start|> This is a very long story book: <book> {context} </book>.\n Based on the content of the book, Question: {self.retrieval_question}\nAnswer:"
             return test_format
         else: 
             return [
@@ -226,8 +238,8 @@ class LLMNeedleHaystackTester:
         prompt = self.generate_prompt(context)
         test_start_time = time.time()
         
-        if(self.model_provider in ["LLaMA3", "Mistral"]):
-            if self.model_provider == "Mistral":
+        if(self.model_provider in ["LLaMA3", "Mistral", "Qwen3"]):
+            if self.model_provider in ["Mistral", "Qwen3"]:
                 prompt = build_chat(self.enc, prompt)
                 
             prompt = self.enc(prompt, return_tensors="pt")
@@ -240,13 +252,15 @@ class LLMNeedleHaystackTester:
                         self.model_to_test, self.enc, max_gen_len=30, select_layer_idx=self.args.filter_idx)
                 else:
                     output_ids = self.model_to_test.generate(
-                            input_ids, 
+                            input_ids,
+                            attention_mask=attention_mask,
                             output_attentions=False,
                             max_new_tokens=30,
                             num_beams=1,
                             do_sample=False,
                             temperature=1.0,
-                            eos_token_id=[self.enc.eos_token_id, self.enc.encode("\n", add_special_tokens=False)[-1]]
+                            eos_token_id=[self.enc.eos_token_id, self.enc.encode("\n", add_special_tokens=False)[-1]],
+                            pad_token_id=self.enc.pad_token_id if self.enc.pad_token_id is not None else self.enc.eos_token_id,
                         )
 
                     response = self.enc.decode(output_ids[0][input_ids.shape[1]:], skip_special_tokens=True).strip()
@@ -339,7 +353,7 @@ class LLMNeedleHaystackTester:
         return context
     
     def encode_text_to_tokens(self, text):
-        if self.model_provider in ["Mistral", "LLaMA3"]:
+        if self.model_provider in ["Mistral", "LLaMA3", "Qwen3"]:
             return self.enc.encode(text, add_special_tokens=False)
         elif self.model_provider == "Anthropic":
             # Assuming you have a different encoder for Anthropic
@@ -391,7 +405,7 @@ class LLMNeedleHaystackTester:
         return new_context
 
     def get_context_length_in_tokens(self, context):
-        if self.model_provider in ["Mistral", "LLaMA3"]:
+        if self.model_provider in ["Mistral", "LLaMA3", "Qwen3"]:
             return len(self.enc.encode(context, add_special_tokens=False))
         else:
             return len(self.enc.encode(context))
@@ -408,14 +422,14 @@ class LLMNeedleHaystackTester:
         return context
 
     def get_tokens_from_context(self, context):
-        if self.model_provider in ["Mistral", "LLaMA3"]:
+        if self.model_provider in ["Mistral", "LLaMA3", "Qwen3"]:
             return self.enc.encode(context, add_special_tokens=False)
         else:
             return self.enc.encode(context)
             # raise ValueError("model_provider must be either 'OpenAI' or 'Anthropic'")
         
     def decode_tokens(self, tokens, context_length=None):
-        if self.model_provider in ["Mistral", "LLaMA3"]:
+        if self.model_provider in ["Mistral", "LLaMA3", "Qwen3"]:
             return self.enc.decode(tokens[:context_length], skip_special_tokens=True)
         else:
             return self.enc.decode(tokens[:context_length])
@@ -463,15 +477,17 @@ if __name__ == "__main__":
     parser.add_argument('-s', '--s_len', default=0, metavar='N', type=int)
     parser.add_argument('-e', '--e_len', default=128000, metavar='N', type=int)
     parser.add_argument("--context_lengths", nargs='+', type=int, 
-                        default=[16000, 32000, 48000, 64000, 80000, 96000, 112000, 128000])
+                        default=[8000, 16000, 32000, 48000, 64000, 80000, 96000, 112000, 128000])
     parser.add_argument('--model_version', type=str, default=None, help='provider of model')
     parser.add_argument('--model_name_suffix', type=str, default=None, help='name of model')
-    parser.add_argument('--model_provider', type=str, default="LLaMA3", choices=["LLaMA3", "Mistral"], help='which model to use')
+    parser.add_argument('--model_provider', type=str, default="LLaMA3", help='which model to use')
     parser.add_argument('--api_key', type=str, default="", help='OpenAI API Key')
     parser.add_argument('--step', type=int, default=1000)
     
     # KV cache compression
-    parser.add_argument("--method", type=str,  default=None, choices=["fullkv", "fastkv", "snapkv", "h2o", "streamingllm", "gemfilter", "pyramidinfer"])
+    parser.add_argument("--method", type=str,  default=None, choices=[
+        "fullkv", "fastkv", "snapkv", "h2o", "streamingllm", "gemfilter"
+    ])
     parser.add_argument("--eviction_mode", type=str, default="constant", choices=["constant", "proportional"])
     parser.add_argument("--retain_rate", type=float, default=0.1, help="retain rate of KV entries")
     parser.add_argument("--max_capacity_prompts", type=int, default=512)
@@ -490,12 +506,24 @@ if __name__ == "__main__":
 
     # PyramidInfer
     parser.add_argument("--pyramidinfer_config", type=str, default="")
-    
+
     args = parser.parse_args()
 
-    from baselines.monkeypatch import replace_llama, replace_mistral
-    replace_llama(args.method)
-    replace_mistral(args.method)
+    from transformers import AutoConfig
+    config = AutoConfig.from_pretrained(args.model_path)
+    model_type = config.model_type
+
+    if model_type == "llama":
+        from baselines.monkeypatch import replace_llama
+        replace_llama(args.method)
+    elif model_type == "mistral":
+        from baselines.monkeypatch import replace_mistral
+        replace_mistral(args.method)
+    elif model_type == "qwen3":
+        from baselines.monkeypatch import replace_qwen3
+        replace_qwen3(args.method)
+    else:
+        raise ValueError(f"Unsupported model type {model_type}")
     
     ht = LLMNeedleHaystackTester(args=args,
                                  model_name=args.model_path, 

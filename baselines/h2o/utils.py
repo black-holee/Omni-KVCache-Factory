@@ -91,34 +91,6 @@ class H2OKVCluster():
             key_states = torch.cat([k_past_compress, k_cur], dim = 2)
             value_states = torch.cat([v_past_compress, v_cur], dim = 2)
             return key_states, value_states
-    
-    def compress_kv(self, past_key_value, attn_score_cache, layer_idx):
-        bsz, num_heads, q_len, head_dim = past_key_value[layer_idx][0].shape
-
-        if self.eviction_mode =="proportional":
-            self.max_capacity_prompt = int(q_len * self.retain_rate)
-        
-        if q_len < self.max_capacity_prompt:
-            return past_key_value
-        else:
-            attn_score_cache = attn_score_cache.view(bsz, 4, 7, q_len, q_len).sum(dim=2)
-            attn_weights_sum = attn_score_cache[:, :, :, : -self.window_size].sum(dim = -2)
-            attn_cache = attn_weights_sum
-            indices = attn_cache.topk(self.max_capacity_prompt - self.window_size, dim=-1).indices
-            indices = indices.unsqueeze(-1).expand(-1, -1, -1, head_dim)
-
-            key_states = past_key_value[layer_idx][0]
-            value_states = past_key_value[layer_idx][1]
-            k_past_compress = key_states[:, :, :-self.window_size, :].gather(dim = 2, index = indices)
-            v_past_compress = value_states[:, :, :-self.window_size, :].gather(dim = 2, index = indices)
-            k_cur = key_states[:, :, -self.window_size:, :]
-            v_cur = value_states[:, :, -self.window_size:, :]
-            key_states = torch.cat([k_past_compress, k_cur], dim = 2)
-            value_states = torch.cat([v_past_compress, v_cur], dim = 2)
-
-            past_key_value.key_cache[layer_idx] = key_states
-            past_key_value.value_cache[layer_idx] = value_states
-            return past_key_value
 
 def init_H2O(self):
     if not hasattr(self, "kv_cluster"):

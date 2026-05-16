@@ -12,10 +12,10 @@ from typing import List
 from baselines.monkeypatch import set_model
 from baselines.gemfilter.utils import gemfilter_generate_selection
 
-context_length_list = [8192, 16384]
+context_length_list = [4096, 8192, 16384, 32768, 65536, 131072]
 
 datasets = ["niah_single_1", "niah_single_2", "niah_single_3", "niah_multikey_1", "niah_multikey_2", "niah_multikey_3",
-            "niah_multiquery", "niah_multivalue", "cwe", "fwe", "vt"]
+            "niah_multiquery", "niah_multivalue", "cwe", "fwe", "vt", "qa_1", "qa_2"]
 
 dataset2maxlen = {
     "niah_single_1": 64,
@@ -28,7 +28,9 @@ dataset2maxlen = {
     "niah_multivalue": 64,
     "cwe": 64,
     "fwe": 64,
-    "vt": 64
+    "vt": 64,
+    "qa_1": 64,
+    "qa_2": 64
 }
 
 
@@ -39,7 +41,8 @@ model2maxlen = {
     "llama-3": 7950,
     "mistral": 127500,
     "ministral": 127500,
-    "llama-3.1": 127500
+    "llama-3.1": 127500,
+    "qwen3": 127500,
 }
 
 
@@ -83,7 +86,6 @@ def main(model, args):
         model_max_len = 7950
         print(f"[{model_path}] Model Max Length ignored due to H2O. Current Max Length is {model_max_len}")
     else:
-
         print(f"[{model_path}] Model Max Length is {model_max_len}")
     
     output_max_len = dataset2maxlen[args.dataset]
@@ -96,9 +98,10 @@ def main(model, args):
             if length > input_max_len: 
                 input_max_len = length
 
-            prompt = example["input"] #TODO tokenizer.apply_chat_template ?
+            prompt = example["input"]
            
-            prompt = build_chat(tokenizer, prompt)
+            # 在生成测试用例的时候就已经添加了chat template，这里不需要再添加了
+            # prompt = build_chat(tokenizer, prompt)
             example["prompt"] = prompt
                 
             test_data.append(example)
@@ -113,7 +116,7 @@ def main(model, args):
     
     for example in test_data:
         prompt_list.append(example["prompt"])
-        input_list.append(example["input"])
+        # input_list.append(example["input"])
         outputs_list.append(example["outputs"])
         length_list.append(example["length"])
         index_list.append(example["index"])
@@ -121,21 +124,55 @@ def main(model, args):
     print("Finish loading model and tokenizer")
     model_name = model_path.split("/")[-1]
 
+    # 如果结果文件已经存在了，就跳过这个实验，避免重复计算浪费时间
+    os.makedirs(os.path.join(args.save_dir, str(args.context_length), args.dataset), exist_ok=True)
+    if args.method in ["fullkv"]:
+        if f"{args.method}_{model_max_len}.json" in os.listdir(os.path.join(args.save_dir, str(args.context_length), args.dataset)):
+            print(f"File {args.dataset}/{args.method}_{model_max_len}.json already exists, skipping...")
+            return
+    elif args.method in ["fastkv"]:
+        if f"{args.method}_{model_max_len}_{args.retain_rate}_{args.window_size if not isinstance(args.window_size, list) else args.window_size[0]}_tsp_rate_{args.tsp_rate}_tsp_idx_{args.tsp_idx}.json" in os.listdir(os.path.join(args.save_dir, str(args.context_length), args.dataset)):
+            print(f"File {args.dataset}/{args.method}_{model_max_len}_{args.retain_rate}_{args.window_size if not isinstance(args.window_size, list) else args.window_size[0]}_tsp_rate_{args.tsp_rate}_tsp_idx_{args.tsp_idx}.json already exists, skipping...")
+            return
+    else:
+        if f"{args.method}_{model_max_len}_{args.retain_rate}_{args.window_size if not isinstance(args.window_size, list) else args.window_size[0]}.json" in os.listdir(os.path.join(args.save_dir, str(args.context_length), args.dataset)):
+            print(f"File {args.dataset}/{args.method}_{model_max_len}_{args.retain_rate}_{args.window_size if not isinstance(args.window_size, list) else args.window_size[0]}.json already exists, skipping...")
+            return
     
     if args.eviction_mode == "constant": 
-        os.makedirs(os.path.join(args.save_dir, args.dataset), exist_ok=True)
-        fout = open(os.path.join(args.save_dir, args.dataset, f"{args.method}.json"), "w")
-        desc_string = f"Predicting {args.dataset} with {args.method}, max_capacity_prompt={args.max_capacity_prompts}"
+        os.makedirs(os.path.join(args.save_dir, str(args.context_length), args.dataset), exist_ok=True)
+
+        if args.method in ["fastkv"]:
+            fout = open(os.path.join(args.save_dir, str(args.context_length), args.dataset, f"{args.method}_{model_max_len}_{args.max_capacity_prompts}_{args.window_size if not isinstance(args.window_size, list) else args.window_size[0]}_tsp_rate_{args.tsp_rate}_tsp_idx_{args.tsp_idx}.json"), "w")
+            print(f"Predicting {args.context_length} {args.dataset} with {args.method}, max_capacity_prompts={args.max_capacity_prompts}, window_size={args.window_size if not isinstance(args.window_size, list) else args.window_size[0]}, tsp_rate={args.tsp_rate}, tsp_idx={args.tsp_idx}")
+        elif args.method in ["fullkv"]:
+            fout = open(os.path.join(args.save_dir, str(args.context_length), args.dataset, f"{args.method}_{model_max_len}.json"), "w")
+            print(f"Predicting {args.context_length} {args.dataset} with {args.method}")
+        else:
+            fout = open(os.path.join(args.save_dir, str(args.context_length), args.dataset, f"{args.method}_{model_max_len}_{args.max_capacity_prompts}_{args.window_size if not isinstance(args.window_size, list) else args.window_size[0]}.json"), "w")
+            print(f"Predicting {args.context_length} {args.dataset} with {args.method}, max_capacity_prompts={args.max_capacity_prompts}, window_size={args.window_size if not isinstance(args.window_size, list) else args.window_size[0]}")
+        
+        desc_string = f"Predicting {args.dataset} with {args.method}, max_capacity_prompts={args.max_capacity_prompts}"
     else:
-        os.makedirs(os.path.join(args.save_dir, args.dataset), exist_ok=True)
-        fout = open(os.path.join(args.save_dir, args.dataset, f"{args.method}.json"), "w")
+        os.makedirs(os.path.join(args.save_dir, str(args.context_length), args.dataset), exist_ok=True)
+
+        if args.method in ["fastkv"]:
+            fout = open(os.path.join(args.save_dir, str(args.context_length), args.dataset, f"{args.method}_{model_max_len}_{args.retain_rate}_{args.window_size if not isinstance(args.window_size, list) else args.window_size[0]}_tsp_rate_{args.tsp_rate}_tsp_idx_{args.tsp_idx}.json"), "w")
+            print(f"Predicting {args.context_length} {args.dataset} with {args.method}, retrain_rate={args.retain_rate}, window_size={args.window_size if not isinstance(args.window_size, list) else args.window_size[0]}, tsp_rate={args.tsp_rate}, tsp_idx={args.tsp_idx}")
+        elif args.method in ["fullkv"]:
+            fout = open(os.path.join(args.save_dir, str(args.context_length), args.dataset, f"{args.method}_{model_max_len}.json"), "w")
+            print(f"Predicting {args.context_length} {args.dataset} with {args.method}")
+        else:
+            fout = open(os.path.join(args.save_dir, str(args.context_length), args.dataset, f"{args.method}_{model_max_len}_{args.retain_rate}_{args.window_size if not isinstance(args.window_size, list) else args.window_size[0]}.json"), "w")
+            print(f"Predicting {args.context_length} {args.dataset} with {args.method}, retrain_rate={args.retain_rate}, window_size={args.window_size if not isinstance(args.window_size, list) else args.window_size[0]}")
+        
         desc_string = f"Predicting {args.dataset} with {args.method}, retrain_rate={args.retain_rate}"
 
     
     for i in tqdm(range(0, len(prompt_list), args.eval_batch_size), desc=desc_string, ncols=100):
         
         batch_prompts = prompt_list[i:i+args.eval_batch_size]
-        batch_inputs = input_list[i:i+args.eval_batch_size]
+        # batch_inputs = input_list[i:i+args.eval_batch_size]
         batch_answers = outputs_list[i:i+args.eval_batch_size]
         batch_lengths = length_list[i:i+args.eval_batch_size]
         
@@ -170,7 +207,8 @@ def main(model, args):
                 do_sample=False,
                 temperature=1.0,
                 min_length=context_length+1,
-                eos_token_id=[tokenizer.eos_token_id]
+                eos_token_id=[tokenizer.eos_token_id],
+                pad_token_id=tokenizer.pad_token_id if tokenizer.pad_token_id is not None else tokenizer.eos_token_id, # 不加上这一句一直报warning
             )
             batch_outputs =tokenizer.batch_decode([output[0][context_length:]], skip_special_tokens=True)
             batch_generations = batch_outputs
@@ -180,8 +218,8 @@ def main(model, args):
         for j in range(args.eval_batch_size):
             
             example = {}
-            example["prompt"] = batch_prompts[j]
-            example["input"] = batch_inputs[j]
+            # example["prompt"] = batch_prompts[j]
+            # example["input"] = batch_inputs[j]
             example["answers"] = batch_answers[j]
             example["pred"] = batch_generations[j]
             example["length"] = batch_lengths[j]
@@ -212,9 +250,12 @@ if __name__ == "__main__":
     parser.add_argument("--max_new_tokens", type=int, default=None, help="")
     parser.add_argument("--eval_batch_size", type=int, default=1, help="batch size for evaluation.")
     parser.add_argument("--context_length", type=int, default=8192, help="")
+    parser.add_argument("--model_template", type=str, default=None, help="model template name")
     
     # KV cache compression
-    parser.add_argument("--method", type=str,  default=None, choices=["fullkv", "fastkv", "snapkv", "h2o", "streamingllm", "gemfilter", "pyramidinfer"])
+    parser.add_argument("--method", type=str,  default=None, choices=[
+        "fullkv", "fastkv", "snapkv", "h2o", "streamingllm", "gemfilter"
+    ])
     parser.add_argument("--eviction_mode", type=str, default="constant", choices=["constant", "proportional"])
     parser.add_argument("--retain_rate", type=float, default=0.1, help="retain rate of KV entries")
     parser.add_argument("--max_capacity_prompts", type=int, default=512)
@@ -237,12 +278,21 @@ if __name__ == "__main__":
     args = parser.parse_args()
     set_seed(args.seed)
 
-    from baselines.monkeypatch import replace_llama, replace_mistral
-    replace_llama(args.method)
-    replace_mistral(args.method)
-    
-    if args.method == "pyramidinfer":
-        args.attn_implementation = "eager"
+    from transformers import AutoConfig
+    config = AutoConfig.from_pretrained(args.model_path)
+    model_type = config.model_type
+
+    if model_type == "llama":
+        from baselines.monkeypatch import replace_llama
+        replace_llama(args.method)
+    elif model_type == "mistral":
+        from baselines.monkeypatch import replace_mistral
+        replace_mistral(args.method)
+    elif model_type == "qwen3":
+        from baselines.monkeypatch import replace_qwen3
+        replace_qwen3(args.method)
+    else:
+        raise ValueError(f"Unsupported model type {model_type}")
 
     tokenizer = AutoTokenizer.from_pretrained(
         args.model_path,
@@ -252,7 +302,7 @@ if __name__ == "__main__":
     
     model = AutoModelForCausalLM.from_pretrained(
         args.model_path,
-        torch_dtype=torch.float16,
+        dtype=torch.float16,
         low_cpu_mem_usage=True,
         device_map="auto",
         use_cache=args.use_cache,
@@ -272,9 +322,9 @@ if __name__ == "__main__":
         if args.eviction_mode == "constant":
             print(f"Working on max_capacity_prompts {args.max_capacity_prompts} dataset {dataset} - {idx}/{len(datasets)}")
         else:
-            print(f"Working on retain_rate {args.retain_rate} dataset {dataset} - {idx}/{len(datasets)}")
+            print(f"Working on retain_rate {args.retain_rate}, context_length {args.context_length}, dataset {dataset} - {idx}/{len(datasets)}")
             
         args.dataset = dataset
-        args.data_file = f"benchmarks/RULER/{args.context_length}/{args.dataset}.jsonl"
+        args.data_file = f"benchmarks/RULER/created_data/{args.model_template}/synthetic/{args.context_length}/{args.dataset}/validation.jsonl"
 
         main(model, args)

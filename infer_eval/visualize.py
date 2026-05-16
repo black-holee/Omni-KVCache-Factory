@@ -9,7 +9,15 @@ import matplotlib.pyplot as plt
 from matplotlib.colors import LinearSegmentedColormap
 
 def main(args):
-    save_path = os.path.join(args.results_dir, f"{args.method}")
+    # save_path = os.path.join(args.results_dir, f"{args.method}")
+
+    if args.method in ["fullkv"]:
+        save_path = os.path.join(args.results_dir, f"{args.method}")
+    elif args.method in ["fastkv"]:
+        save_path = os.path.join(args.results_dir, f"{args.method}_{args.retain_rate}_{args.window_size}_tsp_rate_{args.tsp_rate}_tsp_idx_{args.tsp_idx}")
+    else:
+        save_path = os.path.join(args.results_dir, f"{args.method}_{args.retain_rate}_{args.window_size}")
+
     folder_path = os.path.join(save_path, "context")
 
     plt.rcParams.update({'font.size': 23})
@@ -89,8 +97,14 @@ def main(args):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--results_dir", type=str, default="results/needle")
-    parser.add_argument("--method", type=str,  default=None, choices=["fullkv", "fastkv", "snapkv", "h2o", "streamingllm", "gemfilter", "pyramidinfer"])
+    parser.add_argument("--method", type=str,  default=None)
     parser.add_argument("--expected_answer", type=str, 
                         default="eat a sandwich and sit in Dolores Park on a sunny day.", help="Path to save the output")
+
+    parser.add_argument("--retain_rate", type=float, default=0.1, help="retain rate of KV entries")
+    parser.add_argument("--window_size", type=int, default=8)
+    parser.add_argument("--tsp_rate", type=float, default=0.2, help="tsp_rate used for proportional eviction mode")
+    parser.add_argument("--tsp_idx", type=int, default=15, help="")
+
     args = parser.parse_args()
     main(args)

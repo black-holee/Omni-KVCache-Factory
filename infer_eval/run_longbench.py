@@ -86,7 +86,8 @@ model2maxlen = {
     "llama-3": 7950,
     "mistral": 127500,
     "ministral": 127500,
-    "llama-3.1": 127500
+    "llama-3.1": 127500,
+    "qwen3": 127500,
 }
 
 
@@ -118,7 +119,7 @@ def main(model, args):
 
     if args.method in ["h2o", "pyramidinfer"]:
         # 由于H2O需要计算完整的注意力分布，相比其他方案需要的内存空间更大，因此需要专门限制输入长度以避免爆显存
-        model_max_len = 4096
+        model_max_len = 7950
         print(f"[{model_path}] Model Max Length ignored due to H2O. Current Max Length is {model_max_len}, method: {args.method}")
     else:
         print(f"[{model_path}] Model Max Length is {model_max_len}, method: {args.method}")
@@ -229,11 +230,9 @@ def main(model, args):
                     temperature=1.0,
                     min_length=context_length+1,
                     eos_token_id=[tokenizer.eos_token_id],
-                    pad_token_id=tokenizer.eos_token_id # 不加上这一句一直报warning
+                    pad_token_id=tokenizer.pad_token_id if tokenizer.pad_token_id is not None else tokenizer.eos_token_id,
                 )
                 batch_outputs =tokenizer.batch_decode([output[0][context_length:]], skip_special_tokens=True)
-
-
 
             batch_generations = batch_outputs
             torch.cuda.empty_cache()
@@ -280,12 +279,12 @@ if __name__ == "__main__":
     
     # KV cache compression
     parser.add_argument("--method", type=str,  default=None, choices=[
-        "fullkv", "fastkv", "snapkv", "h2o", "streamingllm", "gemfilter", "pyramidinfer"
+        "fullkv", "fastkv", "snapkv", "h2o", "streamingllm", "gemfilter"
     ])
     parser.add_argument("--eviction_mode", type=str, default="constant", choices=["constant", "proportional"])
     parser.add_argument("--retain_rate", type=float, default=0.1, help="retain rate of KV entries")
     parser.add_argument("--max_capacity_prompts", type=int, default=512, help="保留的键值缓存的最大容量")
-    parser.add_argument("--window_size", type=int, default=8, help="保留的最近的键值缓存的数量，相当于recent_size")
+    parser.add_argument("--window_size", type=int, default=8, help="观察窗口的大小")
     parser.add_argument("--kernel_size", type=int, default=7, help="池化时的kernel size")
     parser.add_argument("--pooling", type=str, default="maxpool")
     parser.add_argument("--merge", type=str, default=None, help="Does not support")
@@ -304,10 +303,22 @@ if __name__ == "__main__":
     args = parser.parse_args()
     set_seed(args.seed)
 
-    from baselines.monkeypatch import replace_llama, replace_mistral
-    replace_llama(args.method)
-    replace_mistral(args.method)
+    from transformers import AutoConfig
+    config = AutoConfig.from_pretrained(args.model_path)
+    model_type = config.model_type
 
+    if model_type == "llama":
+        from baselines.monkeypatch import replace_llama
+        replace_llama(args.method)
+    elif model_type == "mistral":
+        from baselines.monkeypatch import replace_mistral
+        replace_mistral(args.method)
+    elif model_type == "qwen3":
+        from baselines.monkeypatch import replace_qwen3
+        replace_qwen3(args.method)
+    else:
+        raise ValueError(f"Unsupported model type {model_type}")
+    
     tokenizer = AutoTokenizer.from_pretrained(
         args.model_path,
         use_fast=args.use_fast_tokenizer,
@@ -316,7 +327,7 @@ if __name__ == "__main__":
     
     model = AutoModelForCausalLM.from_pretrained(
         args.model_path,
-        torch_dtype=torch.float16,
+        dtype=torch.float16,
         low_cpu_mem_usage=True,
         device_map="auto",
         use_cache=args.use_cache,

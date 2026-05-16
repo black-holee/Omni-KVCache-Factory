@@ -124,7 +124,8 @@ if __name__ == '__main__':
         "llama-3": 7950,
         "mistral": 127500,
         "ministral": 127500,
-        "llama-3.1": 127500
+        "llama-3.1": 127500,
+        "qwen3": 127500,
     }
     model_path = args.model_path.lower()
     for key in model2maxlen:
