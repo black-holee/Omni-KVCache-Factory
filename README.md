@@ -1,5 +1,12 @@
 # Omni-KVCache-Factory
+
+<p align="center">
+  <img src="docs/images/logo.png" alt="Omni-KVCache-Factory Logo">
+</p>
+
 Omni-KVCache-Factory: A repository summarizing KVCache optimization methods, providing ready-to-use code for various methods, supporting multiple models and benchmarks to help researchers quickly run experiments and validate ideas.
+
+[中文文档](docs/README_zh.md)
 
 ## Usage
 ### 1. Installation
