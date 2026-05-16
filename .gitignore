@@ -36,7 +36,7 @@ docs/
 .claude/*local*.*
 
 # ruler data
-./benchmarks/RULER/created_data/
+benchmarks/RULER/created_data/
 
 # PyInstaller
 #   Usually these files are written by a python script from a template
