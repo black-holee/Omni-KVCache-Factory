@@ -5,11 +5,12 @@ Omni-KVCache-Factory: A repository summarizing KVCache optimization methods, pro
 ### 1. Installation
 Installation with the requirements package.
 ```
-conda create -n okfc python=3.9
+conda create -n okfc python=3.10.5
 conda activate okfc
 cd Omni-KVCache-Factory
 pip install -r requirements.txt
-pip install flash-attn==2.6.3
+wget https://github.com/Dao-AILab/flash-attention/releases/download/v2.7.2.post1/flash_attn-2.7.2.post1+cu11torch2.4cxx11abiFALSE-cp310-cp310-linux_x86_64.whl
+pip install ./flash_attn-2.7.2.post1+cu11torch2.4cxx11abiFALSE-cp310-cp310-linux_x86_64.whl
 ```
 
 ### 2. Quick Start
