@@ -20,15 +20,15 @@ Inference with KVCache methods and evaluation for LongBench, Ruler, Needle-in-a-
 # Run LongBench Evaluation
 ./scripts/eval_longbench.sh
 
-# Run RULER Evaluation
-./scripts/eval_ruler.sh
-
 # Run Needle-in-a-Haystack Evaluation
 ./scripts/eval_needle.sh
 
-# Run E2E Latency Benchmark
-./scripts/eval_e2e.sh
+# Run RULER Evaluation
+# 1. Prepare RULER data
+cd benchmarks/RULER
+./ruler_prepare_data.sh
 
-# Run Prefill Latency Benchmark
-./scripts/eval_prefill.sh
+# 2. Run Evaluation
+cd ../..
+./scripts/eval_ruler.sh
 ```

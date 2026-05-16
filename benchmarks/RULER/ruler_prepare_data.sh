@@ -12,7 +12,6 @@ MODEL_PATH=qwen/Qwen3-8B
 model_name="${MODEL_PATH##*/}"
 
 max_seq_length_list=(4096 8192 16384 32768 65536 131072)
-# MAX_SEQ_LENGTH=1024
 BENCHMARK=synthetic
 NUM_SAMPLES=200
 
