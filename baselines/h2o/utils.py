@@ -114,3 +114,6 @@ def init_h2o(self):
         retain_rate = self.config.retain_rate,
         eviction_mode= self.config.eviction_mode
         )
+
+
+init_H2O = init_h2o

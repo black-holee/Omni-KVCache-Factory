@@ -66,9 +66,14 @@ def main(model, args):
     
     model_path = args.model_path.lower()
 
+    model_max_len = None
     for key in model2maxlen:
         if key in model_path:
             model_max_len = model2maxlen[key]
+            break
+
+    if model_max_len is None:
+        model_max_len = getattr(model.config, "max_position_embeddings", 7950)
 
     if args.method in ["h2o", "pyramidinfer"]:
         model_max_len = 7950
@@ -81,7 +86,7 @@ def main(model, args):
     output_max_len = dataset2maxlen[args.dataset]
     
     with open(args.data_file, 'r', encoding='utf-8') as fp:
-        for example in json.load(fp)[:1]:
+        for example in json.load(fp):
             
             example["input"] = example["question"]
             example["length"] = len(example["context"]) + len(example["input"])
@@ -127,8 +132,7 @@ def main(model, args):
         desc_string = f"Predicting {args.dataset} with {args.method}, max_capacity_prompt={args.max_capacity_prompts}"
     elif args.eviction_mode == "proportional":
         os.makedirs(os.path.join(args.save_dir, args.dataset), exist_ok=True)
-        # fout = open(os.path.join(args.save_dir, args.dataset, f"{args.method}.json"), "w")
-        fout = open(os.path.join(args.save_dir, args.dataset, f"test.json"), "w")
+        fout = open(os.path.join(args.save_dir, args.dataset, f"{args.method}.json"), "w")
         desc_string = f"Predicting {args.dataset} with {args.method}, retrain_rate={args.retain_rate}"
     else:
         NotImplementedError(f"No eviction mode found for {args.eviction_mode}")
@@ -244,9 +248,21 @@ if __name__ == "__main__":
     args = parser.parse_args()
     set_seed(args.seed)
 
-    from baselines.monkeypatch import replace_llama, replace_mistral
-    replace_llama(args.method)
-    replace_mistral(args.method)
+    from transformers import AutoConfig
+    config = AutoConfig.from_pretrained(args.model_path)
+    model_type = config.model_type
+
+    if model_type == "llama":
+        from baselines.monkeypatch import replace_llama
+        replace_llama(args.method)
+    elif model_type == "mistral":
+        from baselines.monkeypatch import replace_mistral
+        replace_mistral(args.method)
+    elif model_type == "qwen3":
+        from baselines.monkeypatch import replace_qwen3
+        replace_qwen3(args.method)
+    else:
+        raise ValueError(f"Unsupported model type {model_type}")
     
 
     tokenizer = AutoTokenizer.from_pretrained(
