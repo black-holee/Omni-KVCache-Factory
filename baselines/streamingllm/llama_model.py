@@ -86,11 +86,3 @@ def llama_attn_forward_StreamingLLM(
     attn_output = attn_output.reshape(*input_shape, -1).contiguous()
     attn_output = self.o_proj(attn_output)
     return attn_output, attn_weights
-
-
-def llama_sdpa_attn_forward_StreamingLLM(*args, **kwargs):
-    return llama_attn_forward_StreamingLLM(*args, **kwargs)
-
-
-def llama_flash_attn2_forward_StreamingLLM(*args, **kwargs):
-    return llama_attn_forward_StreamingLLM(*args, **kwargs)

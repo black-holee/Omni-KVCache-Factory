@@ -15,59 +15,27 @@ def replace_llama(method):
 
         llama_module.LlamaModel.forward = llama_model_forward_fastkv
         llama_module.LlamaDecoderLayer.forward = llama_decoderlayer_forward_fastkv
-        if hasattr(llama_module, "LLAMA_ATTENTION_CLASSES"):
-            llama_module.LLAMA_ATTENTION_CLASSES["flash_attention_2"] = LlamaFastKVAttention
-        elif hasattr(llama_module, "LlamaFlashAttention2"):
-            llama_module.LlamaFlashAttention2 = LlamaFastKVAttention
-        else:
-            llama_module.LlamaAttention = LlamaFastKVAttention
+        llama_module.LlamaAttention = LlamaFastKVAttention
 
     elif method == "streamingllm":
-        from baselines.streamingllm.llama_model import (
-            llama_attn_forward_StreamingLLM,
-            llama_flash_attn2_forward_StreamingLLM,
-            llama_sdpa_attn_forward_StreamingLLM,
-        )
+        from baselines.streamingllm.llama_model import llama_attn_forward_StreamingLLM
 
         llama_module.LlamaAttention.forward = llama_attn_forward_StreamingLLM
-        if hasattr(llama_module, "LlamaFlashAttention2"):
-            llama_module.LlamaFlashAttention2.forward = llama_flash_attn2_forward_StreamingLLM
-        if hasattr(llama_module, "LlamaSdpaAttention"):
-            llama_module.LlamaSdpaAttention.forward = llama_sdpa_attn_forward_StreamingLLM
 
     elif method == "h2o":
-        from baselines.h2o.llama_model import (
-            llama_attn_forward_H2O,
-            llama_flash_attn2_forward_H2O,
-            llama_sdpa_attn_forward_H2O,
-        )
+        from baselines.h2o.llama_model import llama_attn_forward_H2O
 
         llama_module.LlamaAttention.forward = llama_attn_forward_H2O
-        if hasattr(llama_module, "LlamaFlashAttention2"):
-            llama_module.LlamaFlashAttention2.forward = llama_flash_attn2_forward_H2O
-        if hasattr(llama_module, "LlamaSdpaAttention"):
-            llama_module.LlamaSdpaAttention.forward = llama_sdpa_attn_forward_H2O
 
     elif method == "snapkv":
-        from baselines.snapkv.llama_model import (
-            llama_attn_forward_SnapKV,
-            llama_flash_attn2_forward_SnapKV,
-            llama_sdpa_attn_forward_SnapKV,
-        )
+        from baselines.snapkv.llama_model import llama_attn_forward_SnapKV
 
         llama_module.LlamaAttention.forward = llama_attn_forward_SnapKV
-        if hasattr(llama_module, "LlamaFlashAttention2"):
-            llama_module.LlamaFlashAttention2.forward = llama_flash_attn2_forward_SnapKV
-        if hasattr(llama_module, "LlamaSdpaAttention"):
-            llama_module.LlamaSdpaAttention.forward = llama_sdpa_attn_forward_SnapKV
 
     elif method == "gemfilter":
         from baselines.gemfilter.llama_model import LlamaGemFilterAttention
 
-        if hasattr(llama_module, "LLAMA_ATTENTION_CLASSES"):
-            llama_module.LLAMA_ATTENTION_CLASSES["flash_attention_2"] = LlamaGemFilterAttention
-        else:
-            llama_module.LlamaAttention = LlamaGemFilterAttention
+        llama_module.LlamaAttention = LlamaGemFilterAttention
 
     elif method == "fullkv":
         pass
