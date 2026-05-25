@@ -57,8 +57,11 @@ class StreamingLLMKVCluster():
         # print(f"StreamingLLM max_capacity_prompt {self.max_capacity_prompt}")
 
         if self.eviction_mode == "proportional":
+            # Keep capacity/window in a valid range for short prompts.
             self.max_capacity_prompt = int(q_len * self.retain_rate)
-            self.window_size = self.max_capacity_prompt - 4
+            self.max_capacity_prompt = max(5, min(self.max_capacity_prompt, q_len))
+            self.window_size = max(1, self.max_capacity_prompt - 4)
+            self.window_size = min(self.window_size, self.max_capacity_prompt - 1)
         
         if q_len < self.max_capacity_prompt:
             return key_states, value_states
